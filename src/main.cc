@@ -1,121 +1,196 @@
+#include "tokens.h"
 #include <arpa/inet.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <netinet/in.h>
+#include <string>
 #include <unistd.h>
 
-const uint32_t PORT     = 51001;
-const uint16_t BUF_SIZE = 1024;
+const std::string SERVER_IPV4_HOST = "150.164.213.243";
+const std::string SERVER_IPV6_HOST = "2804:1f4a:dcc:ff03::1";
+const uint32_t    PORT             = 51001;
+const uint16_t    BUF_SIZE         = 1024;
 
-// Estrutura para a requisição de token individual (tipo 1)
-struct IndividualTokenRequest
+void sendIndividualTokenRequest(const char* host,
+                                uint16_t    port,
+                                const char* id,
+                                uint32_t    nonce)
 {
-        uint16_t type;   // Tipo da mensagem (1)
-        char     id[12]; // ID do aluno (NetID) com 12 bytes
-        uint32_t nonce;  // Nonce de 4 bytes
-} __attribute__((packed));
+    UdpSocket socket(host, port);
 
-// Estrutura para a resposta de token individual (tipo 2)
-struct IndividualTokenResponse
-{
-        uint16_t type;      // Tipo da mensagem (2)
-        char     id[12];    // ID do aluno (NetID) com 12 bytes
-        uint32_t nonce;     // Nonce de 4 bytes
-        char     token[64]; // Token de 64 bytes (em hexadecimal)
-} __attribute__((packed));
-
-// Função para converter os números para a ordem de byte da rede
-uint16_t to_network_short(uint16_t hostshort)
-{
-    return htons(hostshort);
-}
-
-uint32_t to_network_long(uint32_t hostlong)
-{
-    return htonl(hostlong);
-}
-
-uint16_t from_network_short(uint16_t netshort)
-{
-    return ntohs(netshort);
-}
-
-uint32_t from_network_long(uint32_t netlong)
-{
-    return ntohl(netlong);
-}
-
-void send_individual_token_request(const char* host,
-                                   uint16_t    port,
-                                   const char* id,
-                                   uint32_t    nonce)
-{
-    int                           sockfd;
-    struct sockaddr_in            server_addr;
-    struct IndividualTokenRequest request;
-
-    // Criar o socket UDP
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0)
-    {
-        perror("Erro ao criar socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // Configuração do endereço do servidor
-    server_addr.sin_family      = AF_INET;
-    server_addr.sin_port        = to_network_short(port);
-    server_addr.sin_addr.s_addr = inet_addr(host); // Suporta IPv4
-
-    // Preencher a requisição
-    request.type = to_network_short(1);     // Tipo 1: Requisição de token individual
-    strncpy(request.id, id, 12);            // ID do aluno
-    request.nonce = to_network_long(nonce); // Nonce
-
-    // Enviar a requisição
-    ssize_t sent_len = sendto(sockfd,
-                              &request,
-                              sizeof(request),
-                              0,
-                              (struct sockaddr*)&server_addr,
-                              sizeof(server_addr));
-    if (sent_len < 0)
+    IndividualTokenRequest request(id, nonce);
+    if (socket.send(&request, sizeof(request)) < 0)
     {
         perror("Erro ao enviar mensagem");
-        close(sockfd);
         exit(EXIT_FAILURE);
     }
 
     std::cout << "Requisição enviada para o servidor!" << std::endl;
 
-    // Receber a resposta do servidor
-    char      buffer[BUF_SIZE];
-    socklen_t server_len = sizeof(server_addr);
-    ssize_t   recv_len   = recvfrom(sockfd,
-                                buffer,
-                                BUF_SIZE,
-                                0,
-                                (struct sockaddr*)&server_addr,
-                                &server_len);
+    char    buffer[BUF_SIZE];
+    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+
     if (recv_len < 0)
     {
         perror("Erro ao receber resposta");
-        close(sockfd);
         exit(EXIT_FAILURE);
     }
 
-    struct IndividualTokenResponse* response = (struct IndividualTokenResponse*)buffer;
-    if (from_network_short(response->type) == 2)
+    IndividualTokenResponse* response =
+        reinterpret_cast<IndividualTokenResponse*>(buffer);
+
+    if (fromNetworkShort(response->type) == 2)
     {
-        std::cout << "Resposta do servidor: " << std::endl;
-        std::cout << "ID: " << response->id << std::endl;
-        std::cout << "Nonce: " << from_network_long(response->nonce) << std::endl;
-        std::cout << "Token: " << response->token << std::endl;
+        std::cout << "Resposta do servidor:" << std::endl;
+        std::cout << *response << std::endl;
+    }
+    else
+    {
+        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
+
+        if (fromNetworkShort(error_response->type) == 256)
+        {
+            std::cout << *error_response << std::endl;
+        }
+    }
+}
+
+void sendIndividualTokenValidation(const char* host, uint16_t port, const char* sas)
+{
+    UdpSocket socket(host, port);
+
+    IndividualTokenValidation validation =
+        parseIndividualTokenValidationFromString(sas);
+
+    if (socket.send(&validation, sizeof(validation)) < 0)
+    {
+        perror("Erro ao enviar mensagem");
+        exit(EXIT_FAILURE);
     }
 
-    close(sockfd);
+    std::cout << "Validação enviada para o servidor!" << std::endl;
+
+    char    buffer[BUF_SIZE];
+    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+
+    if (recv_len < 0)
+    {
+        perror("Erro ao receber resposta");
+        exit(EXIT_FAILURE);
+    }
+
+    IndividualTokenStatus* status = reinterpret_cast<IndividualTokenStatus*>(buffer);
+
+    if (fromNetworkShort(status->type) == 4)
+    {
+        std::cout << "Resposta do servidor:" << std::endl;
+        std::cout << *status << std::endl;
+    }
+    else
+    {
+        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
+
+        if (fromNetworkShort(error_response->type) == 256)
+        {
+            std::cout << *error_response << std::endl;
+        }
+    }
+}
+
+void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sas)
+{
+    UdpSocket socket(host, port);
+
+    GroupTokenRequest request(sas);
+
+    std::cout << request << std::endl;
+
+    char* serializedRequest = new char[request.packetSize()];
+
+    request.serialize(serializedRequest);
+
+    if (socket.send(serializedRequest, request.packetSize()) < 0)
+    {
+        perror("Erro ao enviar mensagem");
+        exit(EXIT_FAILURE);
+    }
+
+    std::cout << "Requisição enviada para o servidor!" << std::endl;
+
+    char    buffer[BUF_SIZE];
+    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+
+    if (recv_len < 0)
+    {
+        perror("Erro ao receber resposta");
+        exit(EXIT_FAILURE);
+    }
+
+    GroupTokenResponse* response = reinterpret_cast<GroupTokenResponse*>(buffer);
+
+    if (fromNetworkShort(response->type) == 6)
+    {
+        std::cout << "Resposta do servidor:" << std::endl;
+        std::cout << *response << std::endl;
+    }
+    else
+    {
+        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
+
+        if (fromNetworkShort(error_response->type) == 256)
+        {
+            std::cout << *error_response << std::endl;
+        }
+    }
+}
+
+void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
+{
+    UdpSocket socket(host, port);
+
+    GroupTokenValidation validation = parseGroupTokenValidationFromString(sas);
+
+    std::cout << validation << std::endl;
+
+    char* serializedValidation = new char[validation.packetSize()];
+
+    validation.serialize(serializedValidation);
+
+    if (socket.send(serializedValidation, validation.packetSize()) < 0)
+    {
+        perror("Erro ao enviar mensagem");
+        exit(EXIT_FAILURE);
+    }
+
+    std::cout << "Validação enviada para o servidor!" << std::endl;
+
+    char    buffer[BUF_SIZE];
+    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+
+    if (recv_len < 0)
+    {
+        perror("Erro ao receber resposta");
+        exit(EXIT_FAILURE);
+    }
+
+    GroupTokenStatus* status = reinterpret_cast<GroupTokenStatus*>(buffer);
+
+    if (fromNetworkShort(status->type) == 8)
+    {
+        std::cout << "Resposta do servidor:" << std::endl;
+        std::cout << *status << std::endl;
+    }
+    else
+    {
+        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
+
+        if (fromNetworkShort(error_response->type) == 256)
+        {
+            std::cout << *error_response << std::endl;
+        }
+    }
 }
 
 int main(int argc, char* argv[])
@@ -131,17 +206,75 @@ int main(int argc, char* argv[])
     const char* command = argv[3];
 
     if (strcmp(command, "itr") == 0)
-    { // Requisição de token individual
-        if (argc != 5)
+    {
+        if (argc != 6)
         {
             std::cerr << "Uso para itr: ./client <host> <port> itr <id> <nonce>"
                       << std::endl;
             exit(EXIT_FAILURE);
         }
+
         const char* id    = argv[4];
-        uint32_t    nonce = 1; // Exemplo de nonce, substitua conforme necessário
-        send_individual_token_request(host, port, id, nonce);
+        uint32_t    nonce = atoi(argv[5]);
+        sendIndividualTokenRequest(host, port, id, nonce);
+    }
+    else if (strcmp(command, "itv") == 0)
+    {
+        if (argc != 5)
+        {
+            std::cerr << "Uso para itv: ./client <host> <port> itv <SAS>" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        const char* sas = argv[4];
+        sendIndividualTokenValidation(host, port, sas);
+    }
+    else if (strcmp(command, "gtr") == 0)
+    {
+        if (argc < 6)
+        {
+            std::cerr << "Uso para gtr: ./client <host> <port> gtr N <SAS-1> <SAS-2> "
+                         "... <SAS-N>"
+                      << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        uint16_t n = atoi(argv[4]);
+
+        if (argc != 5 + n)
+        {
+            std::cerr << "Uso para gtr: ./client <host> <port> gtr N <SAS-1> <SAS-2> "
+                         "... <SAS-N>"
+                      << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        std::vector<SAS> gas;
+        gas.reserve(n);
+
+        for (int i = 0; i < n; ++i)
+        {
+            gas.emplace_back(argv[5 + i]);
+        }
+
+        sendGroupTokenRequest(host, port, gas);
+    }
+    else if (strcmp(command, "gtv") == 0)
+    {
+        if (argc != 5)
+        {
+            std::cerr << "Uso para gtv: ./client <host> <port> gtv <GAS>" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        const char* sas = argv[4];
+        sendGroupTokenValidation(host, port, sas);
+    }
+    else
+    {
+        std::cerr << "Comando inválido" << std::endl;
+        exit(EXIT_FAILURE);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
