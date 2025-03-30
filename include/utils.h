@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdint.h>
 #include <unistd.h>
+#include <iomanip>
 
 const uint16_t DEFAULT_TIMEOUT = 3; // seconds
 
@@ -159,4 +160,20 @@ std::string titleOutput(std::string title)
     output += std::string(title.size() + 4, '#');
 
     return output;
+}
+
+// Função para imprimir o buffer recebido em bytes
+void printBufferHex(const char* buffer, size_t size)
+{
+    for (size_t i = 0; i < size; ++i)
+    {
+        std::cout << std::hex << std::setw(2) << std::setfill('0')
+                  << (static_cast<unsigned int>(static_cast<unsigned char>(buffer[i]))) << " ";
+
+        // Quebra de linha a cada 16 bytes para facilitar leitura
+        if ((i + 1) % 16 == 0)
+            std::cout << std::endl;
+    }
+    
+    std::cout << std::dec << std::endl; // Retorna para decimal após impressão
 }

@@ -6,21 +6,6 @@
 #include <stdint.h>
 #include <vector>
 
-class BaseIndividualToken
-{
-    public:
-        uint16_t type;
-        char     id[12];
-        uint32_t nonce;
-
-        BaseIndividualToken(uint16_t type, const char* id, uint32_t nonce)
-            : type(toNetworkShort(type)),
-              nonce(toNetworkLong(nonce))
-        {
-            std::memcpy(this->id, id, sizeof(this->id));
-        }
-} __attribute__((packed));
-
 /* [1]
 
     0         2                        14                  18
@@ -28,12 +13,25 @@ class BaseIndividualToken
     | 1       | ID                     | nonce             |
     +----+----+----+----/    /----+----+----+----+----+----+
 */
-class IndividualTokenRequest : public BaseIndividualToken
+class IndividualTokenRequest
 {
     public:
+        uint16_t type;
+        char     id[12];
+        uint32_t nonce;
+
+        IndividualTokenRequest()
+        {
+            std::memset(id, 0, sizeof(id));
+        }
+
         IndividualTokenRequest(const char* id, uint32_t nonce)
-            : BaseIndividualToken(1, id, nonce)
-        { }
+            : type(toNetworkShort(1)), nonce(toNetworkLong(nonce))
+        {
+            IndividualTokenRequest();
+
+            std::memcpy(this->id, id, sizeof(this->id));
+        }
 
         friend std::ostream& operator<<(std::ostream&                 os,
                                         const IndividualTokenRequest& request)
@@ -51,16 +49,29 @@ class IndividualTokenRequest : public BaseIndividualToken
     | 2     | ID            | nonce         | token               |
     +---+---+---+---/   /---+---+---+---+---+---+---/         /---+
 */
-class IndividualTokenResponse : public BaseIndividualToken
+class IndividualTokenResponse //: public BaseIndividualToken
 {
     public:
-        char token[64];
+        uint16_t type;
+        char     id[12];
+        uint32_t nonce;
+        char     token[64];
+
+        IndividualTokenResponse()
+        {
+            std::memset(id, 0, sizeof(id));
+            std::memset(token, 0, sizeof(token));
+        }
 
         IndividualTokenResponse(const char* id, uint32_t nonce, const char* token)
-            : BaseIndividualToken(2, id, nonce)
+            : type(toNetworkShort(2)), nonce(toNetworkLong(nonce))
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            IndividualTokenResponse();
+
+            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->token,
+                        token,
+                        sizeof(this->token));
         }
 
         friend std::ostream& operator<<(std::ostream&                  os,
@@ -79,16 +90,29 @@ class IndividualTokenResponse : public BaseIndividualToken
     | 3     | ID            | nonce         | token               |
     +---+---+---+---/   /---+---+---+---+---+---+---/         /---+
 */
-class IndividualTokenValidation : public BaseIndividualToken
+class IndividualTokenValidation 
 {
     public:
-        char token[64];
+        uint16_t type;
+        char     id[12];
+        uint32_t nonce;
+        char     token[64];
+
+        IndividualTokenValidation()
+        {
+            std::memset(id, 0, sizeof(id));
+            std::memset(token, 0, sizeof(token));
+        }
 
         IndividualTokenValidation(const char* id, uint32_t nonce, const char* token)
-            : BaseIndividualToken(3, id, nonce)
+            : type(toNetworkShort(3)), nonce(toNetworkLong(nonce))
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            IndividualTokenValidation();
+
+            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->token,
+                        token,
+                        sizeof(this->token));
         }
 
         friend std::ostream& operator<<(std::ostream&                    os,
@@ -107,21 +131,30 @@ class IndividualTokenValidation : public BaseIndividualToken
     | 4     | ID            | nonce         | token               | s |
     +---+---+---+---/   /---+---+---+---+---+---+---/         /---+---+
 */
-class IndividualTokenStatus : public BaseIndividualToken
+class IndividualTokenStatus
 {
     public:
-        char token[64];
-        char status;
+        uint16_t type;
+        char     id[12];
+        uint32_t nonce;
+        char     token[64];
+        char     status;
 
-        IndividualTokenStatus(const char* id,
-                              uint32_t    nonce,
-                              const char* token,
-                              char        status)
-            : BaseIndividualToken(4, id, nonce),
-              status(status)
+        IndividualTokenStatus()
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            std::memset(id, 0, sizeof(id));
+            std::memset(token, 0, sizeof(token));
+        }
+
+        IndividualTokenStatus(const char* id, uint32_t nonce, const char* token, char status)
+            : type(toNetworkShort(4)), nonce(toNetworkLong(nonce)), status(status)
+        {
+            IndividualTokenStatus();
+
+            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->token,
+                        token,
+                        sizeof(this->token));
         }
 
         friend std::ostream& operator<<(std::ostream&                os,

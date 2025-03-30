@@ -29,8 +29,8 @@ void sendIndividualTokenRequest(const char* host,
 
     std::cout << "Requisição enviada para o servidor!" << std::endl;
 
-    char    buffer[BUF_SIZE];
-    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+    char    buffer[BUF_SIZE] = {0};
+    ssize_t recv_len = socket.receive(buffer, sizeof(IndividualTokenResponse));
 
     if (recv_len < 0)
     {
@@ -38,13 +38,23 @@ void sendIndividualTokenRequest(const char* host,
         exit(EXIT_FAILURE);
     }
 
-    IndividualTokenResponse* response =
-        reinterpret_cast<IndividualTokenResponse*>(buffer);
+    std::cout << "Buffer enviado:" << std::endl;
+    char serializedRequest[sizeof(request)];
+    std::memset(&serializedRequest, 0, sizeof(request));
+    std::memcpy(&serializedRequest, &request, sizeof(request));
+    printBufferHex(serializedRequest, sizeof(request));
 
-    if (fromNetworkShort(response->type) == 2)
+    std::cout << "Buffer recebido:" << std::endl;
+    printBufferHex(buffer, recv_len);
+
+
+    IndividualTokenResponse response;
+    std::memcpy(&response, buffer, sizeof(IndividualTokenResponse));
+
+    if (fromNetworkShort(response.type) == 2)
     {
         std::cout << "Resposta do servidor:" << std::endl;
-        std::cout << *response << std::endl;
+        std::cout << response << std::endl;
     }
     else
     {
@@ -72,8 +82,8 @@ void sendIndividualTokenValidation(const char* host, uint16_t port, const char* 
 
     std::cout << "Validação enviada para o servidor!" << std::endl;
 
-    char    buffer[BUF_SIZE];
-    ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
+    char    buffer[BUF_SIZE] = {0};
+    ssize_t recv_len = socket.receive(buffer, sizeof(IndividualTokenStatus));
 
     if (recv_len < 0)
     {
@@ -81,12 +91,22 @@ void sendIndividualTokenValidation(const char* host, uint16_t port, const char* 
         exit(EXIT_FAILURE);
     }
 
-    IndividualTokenStatus* status = reinterpret_cast<IndividualTokenStatus*>(buffer);
+    std::cout << "Buffer enviado:" << std::endl;
+    char serializedRequest[sizeof(validation)];
+    std::memset(&serializedRequest, 0, sizeof(validation));
+    std::memcpy(&serializedRequest, &validation, sizeof(validation));
+    printBufferHex(serializedRequest, sizeof(validation));
 
-    if (fromNetworkShort(status->type) == 4)
+    std::cout << "Buffer recebido:" << std::endl;
+    printBufferHex(buffer, recv_len);
+
+    IndividualTokenStatus status;
+    std::memcpy(&status, buffer, sizeof(IndividualTokenStatus));
+
+    if (fromNetworkShort(status.type) == 4)
     {
         std::cout << "Resposta do servidor:" << std::endl;
-        std::cout << *status << std::endl;
+        std::cout << status << std::endl;
     }
     else
     {
@@ -119,7 +139,7 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
 
     std::cout << "Requisição enviada para o servidor!" << std::endl;
 
-    char    buffer[BUF_SIZE];
+    char    buffer[BUF_SIZE] = {0};
     ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
 
     if (recv_len < 0)
@@ -154,7 +174,7 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
 
     std::cout << validation << std::endl;
 
-    char* serializedValidation = new char[validation.packetSize()];
+    char* serializedValidation = new char[validation.packetSize()] {0};
 
     validation.serialize(serializedValidation);
 
@@ -166,7 +186,7 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
 
     std::cout << "Validação enviada para o servidor!" << std::endl;
 
-    char    buffer[BUF_SIZE];
+    char    buffer[BUF_SIZE] = {0};
     ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
 
     if (recv_len < 0)
