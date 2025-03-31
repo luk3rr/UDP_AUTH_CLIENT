@@ -1,1 +1,2 @@
-* SKELETON
+* UDP_AUTH_CLIENT
+  - UDP_AUTH_CLIENT is a simple UDP client that sends a message to a server and waits for a response.
