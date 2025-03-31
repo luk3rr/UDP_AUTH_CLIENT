@@ -101,7 +101,7 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
     UdpSocket socket(host, port);
 
     GroupTokenRequest request(sas);
-    char              serializedRequest[request.packetSize()];
+    char*             serializedRequest = new char[request.packetSize()];
     request.serialize(serializedRequest);
 
     if (socket.send(serializedRequest, request.packetSize()) < 0)
@@ -124,6 +124,7 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
     {
         std::cout << getGroupTokenResponse(buffer, request) << std::endl;
     }
+    delete[] serializedRequest;
 }
 
 void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
@@ -160,7 +161,7 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
         std::cout << status << std::endl;
     }
 
-    delete serializedValidation;
+    delete[] serializedValidation;
 }
 
 int main(int argc, char* argv[])
