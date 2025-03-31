@@ -197,9 +197,7 @@ class IndividualTokenStatus
         friend std::ostream& operator<<(std::ostream&                os,
                                         const IndividualTokenStatus& status)
         {
-            os << removeSpaces(status.id) << ":" << fromNetworkLong(status.nonce) << ":"
-               << std::string(status.token, sizeof(status.token)) << "\n"
-               << "Status: " << static_cast<int>(status.status);
+            os << static_cast<int>(status.status);
             return os;
         }
 
@@ -211,20 +209,6 @@ class SAS
         char     id[12];
         uint32_t nonce;
         char     token[64];
-
-        SAS(const char* buffer)
-        {
-            std::memset(id, CLEAN_CHAR, sizeof(id));
-            std::memcpy(id, buffer, sizeof(id));
-
-            std::memcpy(&nonce, buffer + sizeof(id), sizeof(nonce));
-            nonce = fromNetworkLong(nonce); // Se necessário, converte de rede para host
-
-            std::memset(token, CLEAN_CHAR, sizeof(token));
-            std::memcpy(token,
-                        buffer + sizeof(id) + sizeof(nonce),
-                        sizeof(token)); // Copia o token
-        }
 
         SAS(std::string sas)
         {
@@ -238,11 +222,12 @@ class SAS
             }
 
             std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memset(token, CLEAN_CHAR, sizeof(token));
+
             std::memcpy(id, idStr.c_str(), std::min(idStr.size(), sizeof(id)));
 
             nonce = toNetworkLong(static_cast<uint32_t>(std::stoul(nonceStr)));
 
-            std::memset(token, CLEAN_CHAR, sizeof(token));
             std::memcpy(token,
                         tokenStr.c_str(),
                         std::min(tokenStr.size(), sizeof(token)));
@@ -299,12 +284,41 @@ class BaseGroupToken
     | 5     | N     | SAS-1     | SAS-2     | SAS-N     |
     +---+---+---+---+--/     /--+--/     /--+--/     /--+
 */
-class GroupTokenRequest : public BaseGroupToken
+class GroupTokenRequest
 {
     public:
-        GroupTokenRequest(std::vector<SAS>& gas)
-            : BaseGroupToken(5, gas.size())
+        uint16_t type;
+        uint16_t n;
+        char*    sas;
+
+        GroupTokenRequest(uint16_t type, uint16_t n)
+            : type(toNetworkShort(type)),
+              n(toNetworkShort(n))
         {
+            sas = static_cast<char*>(std::malloc(80 * n));
+
+            if (!sas)
+                throw std::bad_alloc();
+
+            std::memset(sas, CLEAN_CHAR, 80 * n);
+        }
+
+        ~GroupTokenRequest()
+        {
+            std::free(sas);
+        }
+
+        GroupTokenRequest(std::vector<SAS>& gas)
+            : type(toNetworkShort(5)),
+              n(toNetworkShort(gas.size()))
+        {
+            sas = static_cast<char*>(std::malloc(80 * n));
+
+            if (!sas)
+                throw std::bad_alloc();
+
+            std::memset(sas, CLEAN_CHAR, 80 * n);
+
             for (uint16_t i = 0; i < gas.size(); i++)
             {
                 gas[i].serialize(sas, i * 80);
@@ -356,25 +370,39 @@ class GroupTokenRequest : public BaseGroupToken
     | 6     | N     | SAS-1    | SAS-2     | SAS-N     | token   |
     +---+---+---+---+--/    /--+--/     /--+--/     /--+--/   /---
 */
-class GroupTokenResponse : public BaseGroupToken
+class GroupTokenResponse
 {
     public:
-        char token[64];
+        uint16_t type;
+        uint16_t n;
+        char*    sas;
+        char     token[64];
 
-        GroupTokenResponse(std::vector<SAS>& gas, std::string token)
-            : BaseGroupToken(6, gas.size())
+        GroupTokenResponse(GroupTokenRequest request, std::string token)
+            : type(toNetworkShort(6)),
+              n(fromNetworkShort(request.n))
         {
+            this->sas =
+                static_cast<char*>(std::malloc(80 * fromNetworkShort(request.n)));
+
+            if (!this->sas)
+            {
+                throw std::bad_alloc();
+            }
+
             std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
+            std::memset(this->sas, CLEAN_CHAR, 80 * n);
+
             std::memcpy(this->token,
                         token.c_str(),
                         std::min(token.size(), sizeof(this->token)));
 
-            for (uint16_t i = 0; i < gas.size(); i++)
-            {
-                std::cout << "Serializando SAS " << i << ": " << gas[i] << std::endl;
+            std::memcpy(this->sas, request.sas, 80 * fromNetworkShort(request.n));
+        }
 
-                gas[i].serialize(this->sas, i * 80);
-            }
+        ~GroupTokenResponse()
+        {
+            std::free(this->sas);
         }
 
         friend std::ostream& operator<<(std::ostream&             os,
@@ -388,6 +416,11 @@ class GroupTokenResponse : public BaseGroupToken
             os << "\tToken: " << std::string(response.token, sizeof(response.token));
 
             return os;
+        }
+
+        size_t packetSize() const
+        {
+            return sizeof(type) + sizeof(n) + 80 * fromNetworkShort(n) + sizeof(token);
         }
 } __attribute__((packed));
 
@@ -565,86 +598,27 @@ GroupTokenValidation parseGroupTokenValidationFromString(const char* allSas)
     return GroupTokenValidation(sasList, token);
 }
 
-GroupTokenResponse
-parseGroupTokenResponse(const char* buffer, size_t bufferSize, uint16_t numSas)
+std::string getGroupTokenResponse(const char* buffer, GroupTokenRequest& request)
 {
-    uint16_t type;
-    uint16_t n;
-    char     sas[80 * numSas];
-    char     token[64];
+    char token[64];
 
-    // Interpretando os dados do buffer
-    size_t offset = 0;
+    size_t offset =
+        sizeof(uint16_t) + sizeof(uint16_t) + 80 * fromNetworkShort(request.n);
 
-    std::memcpy(&type, buffer + offset, sizeof(type));
-    type = fromNetworkShort(type);
-    offset += sizeof(type);
-
-
-    std::memcpy(&n, buffer + offset, sizeof(n));
-    n = fromNetworkShort(n); // Conversão de rede para host
-    offset += sizeof(n);
-
-    // Preencher SAS (80 * N bytes)
-    std::memcpy(sas, buffer + offset, 80 * numSas);
-    offset += 80 * numSas;
-
+    std::memset(token, CLEAN_CHAR, sizeof(token));
     std::memcpy(token, buffer + offset, sizeof(token));
 
-    // Criar GroupTokenResponse com os dados extraídos
-    std::vector<SAS> sasVector;
-    for (size_t i = 0; i < numSas; ++i)
-    {
-        SAS sasItem(sas + i * 80);
-        sasVector.push_back(sasItem);
-    }
-
-    // Criar GroupTokenResponse
-    std::string tokenStr(token, sizeof(token));
-    return GroupTokenResponse(sasVector, tokenStr);
+    return std::string(token, sizeof(token));
 }
 
-GroupTokenStatus
-parseGroupTokenStatus(const char* buffer, size_t bufferSize, uint16_t numSas)
+int getGroupTokenStatus(const char* buffer, GroupTokenValidation& gtv)
 {
-    std::cout << "PARSE" << std::endl;
-    uint16_t type;
-    uint16_t n;
-    char     sas[80 * numSas];
-    char     token[64];
     char status;
 
     // Interpretando os dados do buffer
-    size_t offset = 0;
-
-    std::memcpy(&type, buffer + offset, sizeof(type));
-    type = fromNetworkShort(type);
-    offset += sizeof(type);
-
-    std::memcpy(&n, buffer + offset, sizeof(n));
-    n = fromNetworkShort(n); // Conversão de rede para host
-    offset += sizeof(n);
-
-    // Preencher SAS (80 * N bytes)
-    std::memcpy(sas, buffer + offset, 80 * n);
-    offset += 80 * n;
-
-    std::memcpy(token, buffer + offset, sizeof(token));
-    offset += sizeof(token);
-
+    size_t offset =
+        sizeof(uint16_t) + sizeof(uint16_t) + 80 * fromNetworkShort(gtv.n) + 64;
     std::memcpy(&status, buffer + offset, sizeof(status));
 
-    // Criar GroupTokenResponse com os dados extraídos
-    std::vector<SAS> sasVector;
-    for (size_t i = 0; i < n; ++i)
-    {
-        std::cout << "HERE" << std::endl;
-        SAS sasItem(sas + i * 80);
-        std::cout << "SHOW" << std::endl;
-        sasVector.push_back(sasItem);
-    }
-
-    // Criar GroupTokenResponse
-    std::string tokenStr(token, sizeof(token));
-    return GroupTokenStatus(sasVector, tokenStr, status);
+    return static_cast<int>(status);
 }

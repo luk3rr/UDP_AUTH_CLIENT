@@ -8,6 +8,26 @@
 #include <string>
 #include <unistd.h>
 
+bool isPacketError(char* buffer, ssize_t packetSize)
+{
+    if (packetSize == sizeof(ErrorResponse))
+    {
+        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
+
+        if (fromNetworkShort(error_response->type) == 256)
+        {
+            std::cout << *error_response << std::endl;
+        }
+        else
+        {
+            std::cerr << "Erro desconhecido" << std::endl;
+        }
+        return true;
+    }
+
+    return false;
+}
+
 void sendIndividualTokenRequest(const char* host,
                                 uint16_t    port,
                                 const char* id,
@@ -22,9 +42,7 @@ void sendIndividualTokenRequest(const char* host,
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Requisição enviada para o servidor!" << std::endl;
-
-    char    buffer[BUF_SIZE];
+    char buffer[BUF_SIZE];
     std::memset(buffer, CLEAN_CHAR, sizeof(buffer));
     ssize_t recv_len = socket.receive(buffer, sizeof(IndividualTokenResponse));
 
@@ -37,19 +55,9 @@ void sendIndividualTokenRequest(const char* host,
     IndividualTokenResponse response;
     std::memcpy(&response, buffer, sizeof(IndividualTokenResponse));
 
-    if (fromNetworkShort(response.type) == 2)
+    if (!isPacketError(buffer, recv_len))
     {
-        std::cout << "Resposta do servidor:" << std::endl;
         std::cout << response << std::endl;
-    }
-    else
-    {
-        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
-
-        if (fromNetworkShort(error_response->type) == 256)
-        {
-            std::cout << *error_response << std::endl;
-        }
     }
 }
 
@@ -69,9 +77,7 @@ void sendIndividualTokenValidation(const char* host, uint16_t port, const char* 
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Validação enviada para o servidor!" << std::endl;
-
-    char    buffer[BUF_SIZE];
+    char buffer[BUF_SIZE];
     std::memset(buffer, CLEAN_CHAR, sizeof(IndividualTokenStatus));
     ssize_t recv_len = socket.receive(buffer, sizeof(IndividualTokenStatus));
 
@@ -84,19 +90,9 @@ void sendIndividualTokenValidation(const char* host, uint16_t port, const char* 
     IndividualTokenStatus status;
     std::memcpy(&status, buffer, sizeof(IndividualTokenStatus));
 
-    if (fromNetworkShort(status.type) == 4)
+    if (!isPacketError(buffer, recv_len))
     {
-        std::cout << "Resposta do servidor:" << std::endl;
         std::cout << status << std::endl;
-    }
-    else
-    {
-        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
-
-        if (fromNetworkShort(error_response->type) == 256)
-        {
-            std::cout << *error_response << std::endl;
-        }
     }
 }
 
@@ -105,7 +101,7 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
     UdpSocket socket(host, port);
 
     GroupTokenRequest request(sas);
-    char serializedRequest[request.packetSize()];
+    char              serializedRequest[request.packetSize()];
     request.serialize(serializedRequest);
 
     if (socket.send(serializedRequest, request.packetSize()) < 0)
@@ -114,9 +110,7 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Requisição enviada para o servidor!" << std::endl;
-
-    char    buffer[BUF_SIZE];
+    char buffer[BUF_SIZE];
     std::memset(buffer, CLEAN_CHAR, sizeof(buffer));
     ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
 
@@ -126,22 +120,9 @@ void sendGroupTokenRequest(const char* host, uint16_t port, std::vector<SAS>& sa
         exit(EXIT_FAILURE);
     }
 
-    GroupTokenResponse response = parseGroupTokenResponse(
-        buffer, recv_len, fromNetworkShort(request.n));
-
-    if (fromNetworkShort(response.type) == 6)
+    if (!isPacketError(buffer, recv_len))
     {
-        std::cout << "Resposta do servidor:" << std::endl;
-        std::cout << response << std::endl;
-    }
-    else
-    {
-        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
-
-        if (fromNetworkShort(error_response->type) == 256)
-        {
-            std::cout << *error_response << std::endl;
-        }
+        std::cout << getGroupTokenResponse(buffer, request) << std::endl;
     }
 }
 
@@ -150,8 +131,6 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
     UdpSocket socket(host, port);
 
     GroupTokenValidation validation = parseGroupTokenValidationFromString(sas);
-
-    std::cout << validation << std::endl;
 
     char* serializedValidation = new char[validation.packetSize()];
     std::memset(serializedValidation, CLEAN_CHAR, validation.packetSize());
@@ -164,9 +143,7 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Validação enviada para o servidor!" << std::endl;
-
-    char    buffer[BUF_SIZE];
+    char buffer[BUF_SIZE];
     std::memset(buffer, CLEAN_CHAR, sizeof(buffer));
     ssize_t recv_len = socket.receive(buffer, BUF_SIZE);
 
@@ -176,23 +153,14 @@ void sendGroupTokenValidation(const char* host, uint16_t port, const char* sas)
         exit(EXIT_FAILURE);
     }
 
-    GroupTokenStatus status = parseGroupTokenStatus(
-        buffer, recv_len, fromNetworkShort(validation.n));
+    int status = getGroupTokenStatus(buffer, validation);
 
-    if (fromNetworkShort(status.type) == 8)
+    if (!isPacketError(buffer, recv_len))
     {
-        std::cout << "Resposta do servidor:" << std::endl;
         std::cout << status << std::endl;
     }
-    else
-    {
-        ErrorResponse* error_response = reinterpret_cast<ErrorResponse*>(buffer);
 
-        if (fromNetworkShort(error_response->type) == 256)
-        {
-            std::cout << *error_response << std::endl;
-        }
-    }
+    delete serializedValidation;
 }
 
 int main(int argc, char* argv[])
