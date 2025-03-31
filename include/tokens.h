@@ -21,16 +21,18 @@ class IndividualTokenRequest
         uint32_t nonce;
 
         IndividualTokenRequest()
+            : type(toNetworkShort(1)),
+              nonce(toNetworkLong(0))
         {
-            std::memset(id, 0, sizeof(id));
+            std::memset(id, CLEAN_CHAR, sizeof(id));
         }
 
-        IndividualTokenRequest(const char* id, uint32_t nonce)
-            : type(toNetworkShort(1)), nonce(toNetworkLong(nonce))
+        IndividualTokenRequest(std::string id, uint32_t nonce)
+            : type(toNetworkShort(1)),
+              nonce(toNetworkLong(nonce))
         {
-            IndividualTokenRequest();
-
-            std::memcpy(this->id, id, sizeof(this->id));
+            std::memset(this->id, CLEAN_CHAR, sizeof(this->id));
+            std::memcpy(this->id, id.c_str(), std::min(id.size(), sizeof(this->id)));
         }
 
         friend std::ostream& operator<<(std::ostream&                 os,
@@ -49,7 +51,7 @@ class IndividualTokenRequest
     | 2     | ID            | nonce         | token               |
     +---+---+---+---/   /---+---+---+---+---+---+---/         /---+
 */
-class IndividualTokenResponse //: public BaseIndividualToken
+class IndividualTokenResponse
 {
     public:
         uint16_t type;
@@ -58,27 +60,31 @@ class IndividualTokenResponse //: public BaseIndividualToken
         char     token[64];
 
         IndividualTokenResponse()
+            : type(toNetworkShort(2)),
+              nonce(toNetworkLong(0))
         {
-            std::memset(id, 0, sizeof(id));
-            std::memset(token, 0, sizeof(token));
+            std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memset(token, CLEAN_CHAR, sizeof(token));
         }
 
-        IndividualTokenResponse(const char* id, uint32_t nonce, const char* token)
-            : type(toNetworkShort(2)), nonce(toNetworkLong(nonce))
+        IndividualTokenResponse(std::string id, uint32_t nonce, std::string token)
+            : type(toNetworkShort(2)),
+              nonce(toNetworkLong(nonce))
         {
-            IndividualTokenResponse();
+            std::memset(this->id, CLEAN_CHAR, sizeof(this->id));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
 
-            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->id, id.c_str(), std::min(id.size(), sizeof(this->id)));
             std::memcpy(this->token,
-                        token,
-                        sizeof(this->token));
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
         }
 
         friend std::ostream& operator<<(std::ostream&                  os,
                                         const IndividualTokenResponse& response)
         {
-            os << response.id << ":" << fromNetworkLong(response.nonce) << ":"
-               << std::string(response.token, sizeof(response.token));
+            os << removeSpaces(response.id) << ":" << fromNetworkLong(response.nonce)
+               << ":" << std::string(response.token, sizeof(response.token));
             return os;
         }
 } __attribute__((packed));
@@ -90,7 +96,7 @@ class IndividualTokenResponse //: public BaseIndividualToken
     | 3     | ID            | nonce         | token               |
     +---+---+---+---/   /---+---+---+---+---+---+---/         /---+
 */
-class IndividualTokenValidation 
+class IndividualTokenValidation
 {
     public:
         uint16_t type;
@@ -99,28 +105,50 @@ class IndividualTokenValidation
         char     token[64];
 
         IndividualTokenValidation()
+            : type(toNetworkShort(3)),
+              nonce(toNetworkLong(0))
         {
-            std::memset(id, 0, sizeof(id));
-            std::memset(token, 0, sizeof(token));
+            std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memset(token, CLEAN_CHAR, sizeof(token));
         }
 
-        IndividualTokenValidation(const char* id, uint32_t nonce, const char* token)
-            : type(toNetworkShort(3)), nonce(toNetworkLong(nonce))
+        IndividualTokenValidation(std::string id, uint32_t nonce, std::string token)
+            : type(toNetworkShort(3)),
+              nonce(toNetworkLong(nonce))
         {
-            IndividualTokenValidation();
+            std::memset(this->id, CLEAN_CHAR, sizeof(this->id));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
 
-            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->id, id.c_str(), std::min(id.size(), sizeof(this->id)));
             std::memcpy(this->token,
-                        token,
-                        sizeof(this->token));
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
         }
 
         friend std::ostream& operator<<(std::ostream&                    os,
                                         const IndividualTokenValidation& validation)
         {
-            os << validation.id << ":" << fromNetworkLong(validation.nonce) << ":"
+            os << removeSpaces(validation.id) << ":"
+               << fromNetworkLong(validation.nonce) << ":"
                << std::string(validation.token, sizeof(validation.token));
             return os;
+        }
+
+        void serialize(char* buffer)
+        {
+            std::memset(buffer, CLEAN_CHAR, sizeof(IndividualTokenValidation));
+
+            std::memcpy(buffer, &type, sizeof(type));
+            std::memcpy(buffer + sizeof(type), id, sizeof(id));
+            std::memcpy(buffer + sizeof(type) + sizeof(id), &nonce, sizeof(nonce));
+            std::memcpy(buffer + sizeof(type) + sizeof(id) + sizeof(nonce),
+                        token,
+                        sizeof(token));
+        }
+
+        size_t packetSize() const
+        {
+            return sizeof(type) + sizeof(id) + sizeof(nonce) + sizeof(token);
         }
 } __attribute__((packed));
 
@@ -141,26 +169,35 @@ class IndividualTokenStatus
         char     status;
 
         IndividualTokenStatus()
+            : type(toNetworkShort(4)),
+              nonce(toNetworkLong(0)),
+              status(CLEAN_CHAR)
         {
-            std::memset(id, 0, sizeof(id));
-            std::memset(token, 0, sizeof(token));
+            std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memset(token, CLEAN_CHAR, sizeof(token));
         }
 
-        IndividualTokenStatus(const char* id, uint32_t nonce, const char* token, char status)
-            : type(toNetworkShort(4)), nonce(toNetworkLong(nonce)), status(status)
+        IndividualTokenStatus(std::string id,
+                              uint32_t    nonce,
+                              std::string token,
+                              char        status)
+            : type(toNetworkShort(4)),
+              nonce(toNetworkLong(nonce)),
+              status(status)
         {
-            IndividualTokenStatus();
+            std::memset(this->id, CLEAN_CHAR, sizeof(this->id));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
 
-            std::memcpy(this->id, id, sizeof(this->id));
+            std::memcpy(this->id, id.c_str(), std::min(id.size(), sizeof(this->id)));
             std::memcpy(this->token,
-                        token,
-                        sizeof(this->token));
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
         }
 
         friend std::ostream& operator<<(std::ostream&                os,
                                         const IndividualTokenStatus& status)
         {
-            os << status.id << ":" << fromNetworkLong(status.nonce) << ":"
+            os << removeSpaces(status.id) << ":" << fromNetworkLong(status.nonce) << ":"
                << std::string(status.token, sizeof(status.token)) << "\n"
                << "Status: " << static_cast<int>(status.status);
             return os;
@@ -175,7 +212,21 @@ class SAS
         uint32_t nonce;
         char     token[64];
 
-        SAS(const char* sas)
+        SAS(const char* buffer)
+        {
+            std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memcpy(id, buffer, sizeof(id));
+
+            std::memcpy(&nonce, buffer + sizeof(id), sizeof(nonce));
+            nonce = fromNetworkLong(nonce); // Se necessário, converte de rede para host
+
+            std::memset(token, CLEAN_CHAR, sizeof(token));
+            std::memcpy(token,
+                        buffer + sizeof(id) + sizeof(nonce),
+                        sizeof(token)); // Copia o token
+        }
+
+        SAS(std::string sas)
         {
             std::stringstream ss(sas);
             std::string       idStr, nonceStr, tokenStr;
@@ -186,26 +237,18 @@ class SAS
                 throw std::invalid_argument("Invalid SAS format");
             }
 
-            std::memset(id, 0, sizeof(id));
-            std::memcpy(id, idStr.c_str(), std::min(sizeof(id), idStr.size()));
+            std::memset(id, CLEAN_CHAR, sizeof(id));
+            std::memcpy(id, idStr.c_str(), std::min(idStr.size(), sizeof(id)));
 
             nonce = toNetworkLong(static_cast<uint32_t>(std::stoul(nonceStr)));
 
-            std::memset(token, 0, sizeof(token));
+            std::memset(token, CLEAN_CHAR, sizeof(token));
             std::memcpy(token,
                         tokenStr.c_str(),
-                        std::min(sizeof(token), tokenStr.size()));
-
-            std::cout << titleOutput("SAS") << std::endl;
-
-            std::cout << "\tid: " << id << " || size: " << sizeof(id) << "\n"
-                      << "\tnonce: " << fromNetworkLong(nonce)
-                      << " || size: " << sizeof(nonce) << "\n"
-                      << "\ttoken: " << std::string(token, sizeof(token))
-                      << " || size: " << sizeof(token) << std::endl;
+                        std::min(tokenStr.size(), sizeof(token)));
         }
 
-        void serialize(char* buffer, size_t offset = 0, bool debug = false)
+        void serialize(char* buffer, size_t offset = 0)
         {
             std::memcpy(buffer + offset, id, sizeof(id)); // Copia o id
             std::memcpy(buffer + offset + sizeof(id),
@@ -214,22 +257,11 @@ class SAS
             std::memcpy(buffer + offset + sizeof(id) + sizeof(nonce),
                         token,
                         sizeof(token)); // Copia o token
-
-            if (debug)
-            {
-                std::cout << "Serialized SAS: ";
-                for (size_t i = 0; i < sizeof(id) + sizeof(nonce) + sizeof(token); i++)
-                {
-                    std::cout << std::hex << std::setw(2) << std::setfill('0')
-                              << (unsigned int)(unsigned char)buffer[offset + i] << " ";
-                }
-                std::cout << std::dec << std::endl;
-            }
         }
 
         friend std::ostream& operator<<(std::ostream& os, const SAS& sas)
         {
-            os << sas.id << ":" << fromNetworkLong(sas.nonce) << ":"
+            os << removeSpaces(sas.id) << ":" << fromNetworkLong(sas.nonce) << ":"
                << std::string(sas.token, sizeof(sas.token));
             return os;
         }
@@ -251,7 +283,7 @@ class BaseGroupToken
             if (!sas)
                 throw std::bad_alloc();
 
-            std::memset(sas, 0, 80 * n);
+            std::memset(sas, CLEAN_CHAR, 80 * n);
         }
 
         ~BaseGroupToken()
@@ -308,6 +340,7 @@ class GroupTokenRequest : public BaseGroupToken
 
         void serialize(char* buffer, size_t offset = 0)
         {
+            std::memset(buffer, CLEAN_CHAR, packetSize());
             std::memcpy(buffer + offset, &type, sizeof(type));
             std::memcpy(buffer + offset + sizeof(type), &n, sizeof(n));
             std::memcpy(buffer + offset + sizeof(type) + sizeof(n),
@@ -328,14 +361,18 @@ class GroupTokenResponse : public BaseGroupToken
     public:
         char token[64];
 
-        GroupTokenResponse(std::vector<SAS>& gas, const char* token)
+        GroupTokenResponse(std::vector<SAS>& gas, std::string token)
             : BaseGroupToken(6, gas.size())
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
+            std::memcpy(this->token,
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
 
             for (uint16_t i = 0; i < gas.size(); i++)
             {
+                std::cout << "Serializando SAS " << i << ": " << gas[i] << std::endl;
+
                 gas[i].serialize(this->sas, i * 80);
             }
         }
@@ -348,8 +385,7 @@ class GroupTokenResponse : public BaseGroupToken
 
             os << "\tType: " << fromNetworkShort(response.type) << "\n";
             os << "\tN: " << fromNetworkShort(response.n) << "\n";
-            os << "\tToken: " << std::string(response.token, sizeof(response.token))
-               << "\n";
+            os << "\tToken: " << std::string(response.token, sizeof(response.token));
 
             return os;
         }
@@ -367,11 +403,13 @@ class GroupTokenValidation : public BaseGroupToken
     public:
         char token[64];
 
-        GroupTokenValidation(std::vector<SAS>& gas, const char* token)
+        GroupTokenValidation(std::vector<SAS>& gas, std::string token)
             : BaseGroupToken(7, gas.size())
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
+            std::memcpy(this->token,
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
 
             for (uint16_t i = 0; i < gas.size(); i++)
             {
@@ -386,8 +424,8 @@ class GroupTokenValidation : public BaseGroupToken
 
             os << "\tType: " << fromNetworkShort(validation.type) << "\n";
             os << "\tN: " << fromNetworkShort(validation.n) << "\n";
-            os << "\tToken: " << std::string(validation.token, sizeof(validation.token))
-               << "\n";
+            os << "\tToken: "
+               << std::string(validation.token, sizeof(validation.token));
 
             return os;
         }
@@ -424,12 +462,14 @@ class GroupTokenStatus : public BaseGroupToken
         char token[64];
         char status;
 
-        GroupTokenStatus(std::vector<SAS>& gas, const char* token, char status)
+        GroupTokenStatus(std::vector<SAS>& gas, std::string token, char status)
             : BaseGroupToken(8, gas.size()),
               status(status)
         {
-            std::memset(this->token, 0, sizeof(this->token));
-            std::memcpy(this->token, token, sizeof(this->token));
+            std::memset(this->token, CLEAN_CHAR, sizeof(this->token));
+            std::memcpy(this->token,
+                        token.c_str(),
+                        std::min(token.size(), sizeof(this->token)));
 
             for (uint16_t i = 0; i < gas.size(); i++)
             {
@@ -493,7 +533,7 @@ IndividualTokenValidation parseIndividualTokenValidationFromString(const char* s
     nonce = static_cast<uint32_t>(std::stoul(nonceStr));
     std::getline(ss, token, ':');
 
-    return IndividualTokenValidation(id.c_str(), nonce, token.c_str());
+    return IndividualTokenValidation(id, nonce, token);
 }
 
 GroupTokenValidation parseGroupTokenValidationFromString(const char* allSas)
@@ -513,7 +553,7 @@ GroupTokenValidation parseGroupTokenValidationFromString(const char* allSas)
     {
         try
         {
-            sasList.emplace_back(sas.c_str());
+            sasList.emplace_back(sas);
         }
         catch (const std::invalid_argument& e)
         {
@@ -522,5 +562,89 @@ GroupTokenValidation parseGroupTokenValidationFromString(const char* allSas)
         }
     }
 
-    return GroupTokenValidation(sasList, token.c_str());
+    return GroupTokenValidation(sasList, token);
+}
+
+GroupTokenResponse
+parseGroupTokenResponse(const char* buffer, size_t bufferSize, uint16_t numSas)
+{
+    uint16_t type;
+    uint16_t n;
+    char     sas[80 * numSas];
+    char     token[64];
+
+    // Interpretando os dados do buffer
+    size_t offset = 0;
+
+    std::memcpy(&type, buffer + offset, sizeof(type));
+    type = fromNetworkShort(type);
+    offset += sizeof(type);
+
+
+    std::memcpy(&n, buffer + offset, sizeof(n));
+    n = fromNetworkShort(n); // Conversão de rede para host
+    offset += sizeof(n);
+
+    // Preencher SAS (80 * N bytes)
+    std::memcpy(sas, buffer + offset, 80 * numSas);
+    offset += 80 * numSas;
+
+    std::memcpy(token, buffer + offset, sizeof(token));
+
+    // Criar GroupTokenResponse com os dados extraídos
+    std::vector<SAS> sasVector;
+    for (size_t i = 0; i < numSas; ++i)
+    {
+        SAS sasItem(sas + i * 80);
+        sasVector.push_back(sasItem);
+    }
+
+    // Criar GroupTokenResponse
+    std::string tokenStr(token, sizeof(token));
+    return GroupTokenResponse(sasVector, tokenStr);
+}
+
+GroupTokenStatus
+parseGroupTokenStatus(const char* buffer, size_t bufferSize, uint16_t numSas)
+{
+    std::cout << "PARSE" << std::endl;
+    uint16_t type;
+    uint16_t n;
+    char     sas[80 * numSas];
+    char     token[64];
+    char status;
+
+    // Interpretando os dados do buffer
+    size_t offset = 0;
+
+    std::memcpy(&type, buffer + offset, sizeof(type));
+    type = fromNetworkShort(type);
+    offset += sizeof(type);
+
+    std::memcpy(&n, buffer + offset, sizeof(n));
+    n = fromNetworkShort(n); // Conversão de rede para host
+    offset += sizeof(n);
+
+    // Preencher SAS (80 * N bytes)
+    std::memcpy(sas, buffer + offset, 80 * n);
+    offset += 80 * n;
+
+    std::memcpy(token, buffer + offset, sizeof(token));
+    offset += sizeof(token);
+
+    std::memcpy(&status, buffer + offset, sizeof(status));
+
+    // Criar GroupTokenResponse com os dados extraídos
+    std::vector<SAS> sasVector;
+    for (size_t i = 0; i < n; ++i)
+    {
+        std::cout << "HERE" << std::endl;
+        SAS sasItem(sas + i * 80);
+        std::cout << "SHOW" << std::endl;
+        sasVector.push_back(sasItem);
+    }
+
+    // Criar GroupTokenResponse
+    std::string tokenStr(token, sizeof(token));
+    return GroupTokenStatus(sasVector, tokenStr, status);
 }

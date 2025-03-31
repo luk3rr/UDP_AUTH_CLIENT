@@ -2,14 +2,16 @@
 #include <arpa/inet.h>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <netdb.h>
 #include <sstream>
 #include <stdint.h>
 #include <unistd.h>
-#include <iomanip>
 
 const uint16_t DEFAULT_TIMEOUT = 3; // seconds
+const uint16_t BUF_SIZE        = 1024;
+const char     CLEAN_CHAR      = ' ';
 
 class UdpSocket
 {
@@ -153,7 +155,6 @@ bool isValidAscii(const std::string& str)
 
 std::string titleOutput(std::string title)
 {
-
     std::string output = "\n";
     output += std::string(title.size() + 4, '#') + "\n";
     output += "# " + title + " #\n";
@@ -162,18 +163,32 @@ std::string titleOutput(std::string title)
     return output;
 }
 
-// Função para imprimir o buffer recebido em bytes
-void printBufferHex(const char* buffer, size_t size)
+void printBufferHex(const void* data, size_t size)
 {
+    const unsigned char* bytes = static_cast<const unsigned char*>(data);
     for (size_t i = 0; i < size; ++i)
     {
         std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << (static_cast<unsigned int>(static_cast<unsigned char>(buffer[i]))) << " ";
+                  << static_cast<int>(bytes[i]) << " ";
 
         // Quebra de linha a cada 16 bytes para facilitar leitura
         if ((i + 1) % 16 == 0)
             std::cout << std::endl;
     }
-    
-    std::cout << std::dec << std::endl; // Retorna para decimal após impressão
+    std::cout << std::dec << std::endl; // Retorna ao formato decimal
+}
+
+std::string removeSpaces(const char* charArray)
+{
+    std::string result;
+    size_t      length = std::strlen(charArray);
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if (charArray[i] != ' ' && charArray[i] != '\0')
+        {
+            result.push_back(charArray[i]);
+        }
+    }
+    return result;
 }
