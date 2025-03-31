@@ -1,6 +1,7 @@
 # EXE
 bin/program
 bin/unit_test
+client
 
 # OBJ file
 *.o

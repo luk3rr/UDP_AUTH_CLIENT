@@ -1,6 +1,0 @@
--xc++
--I
-include
--I
-include/lib
---std=c++20
